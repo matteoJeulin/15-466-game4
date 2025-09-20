@@ -8,7 +8,7 @@
 #include <vector>
 #include <deque>
 
-#include "parse_text.hpp"
+#include "StateMachine.hpp"
 
 struct PlayMode : Mode {
 	PlayMode();

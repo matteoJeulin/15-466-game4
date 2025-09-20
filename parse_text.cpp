@@ -5,6 +5,8 @@
 #include <filesystem>
 #include "read_write_chunk.hpp"
 
+#include "StateMachine.hpp"
+
 Parser::Parser()
 {
     FT_Error ft_error;
@@ -155,15 +157,15 @@ void Parser::parse_story(const std::string &filename)
     file.close();
 }
 
-StateMachine::StateMachine()
-{
-    states = std::vector<State>();
-}
+// StateMachine::StateMachine()
+// {
+//     states = std::vector<State>();
+// }
 
-StateMachine::StateMachine(std::vector<State> _states)
-{
-    states = std::vector(_states);
-}
+// StateMachine::StateMachine(std::vector<State> _states)
+// {
+//     states = std::vector(_states);
+// }
 
 int main()
 {
