@@ -8,6 +8,8 @@
 #include <vector>
 #include <deque>
 
+#include "parse_text.hpp"
+
 struct PlayMode : Mode {
 	PlayMode();
 	virtual ~PlayMode();
@@ -36,6 +38,8 @@ struct PlayMode : Mode {
 	glm::quat upper_leg_base_rotation;
 	glm::quat lower_leg_base_rotation;
 	float wobble = 0.0f;
+
+	StateMachine story;
 
 	glm::vec3 get_leg_tip_position();
 

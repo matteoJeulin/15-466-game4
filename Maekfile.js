@@ -93,9 +93,9 @@ if (maek.OS === "windows") {
 	);
 	maek.options.LINKLibs.push(
 		//linker flags for nest libraries:
-		`-L${NEST_LIBS}/SDL3/lib`,  `-lSDL3`,
+		`-L${NEST_LIBS}/SDL3/lib`, `-lSDL3`,
 		`-framework`, `OpenGL`,
- 		`-Wl,-framework,CoreMedia`,
+		`-Wl,-framework,CoreMedia`,
 		`-Wl,-framework,CoreVideo`,
 		`-Wl,-framework,Cocoa`,
 		`-Wl,-weak_framework,UniformTypeIdentifiers`,
@@ -136,9 +136,9 @@ let copies = [
 	maek.COPY(`${NEST_LIBS}/freetype/dist/README-freetype.txt`, `dist/README-freetype.txt`)
 ];
 if (maek.OS === 'windows') {
-	copies.push( maek.COPY(`${NEST_LIBS}/SDL3/dist/SDL3.dll`, `dist/SDL3.dll`) );
+	copies.push(maek.COPY(`${NEST_LIBS}/SDL3/dist/SDL3.dll`, `dist/SDL3.dll`));
 	//this one needed because the show-*.exe helpers sit in scenes/:
-	copies.push( maek.COPY(`${NEST_LIBS}/SDL3/dist/SDL3.dll`, `scenes/SDL3.dll`) );
+	copies.push(maek.COPY(`${NEST_LIBS}/SDL3/dist/SDL3.dll`, `scenes/SDL3.dll`));
 }
 
 //call rules on the maek object to specify tasks.
@@ -171,7 +171,8 @@ const common_names = [
 	maek.CPP('gl_compile_program.cpp'),
 	maek.CPP('Mode.cpp'),
 	maek.CPP('GL.cpp'),
-	maek.CPP('Load.cpp')
+	maek.CPP('Load.cpp'),
+	maek.CPP('StateMachine.cpp')
 ];
 
 const show_meshes_names = [
@@ -187,7 +188,8 @@ const show_scene_names = [
 ];
 
 const freetype_test_names = [
-	maek.CPP('freetype-test.cpp')
+	// maek.CPP('freetype-test.cpp')
+	maek.CPP('parse_text.cpp')
 ];
 
 //the '[exeFile =] LINK(objFiles, exeFileBase, [, options])' links an array of objects into an executable:
@@ -405,8 +407,8 @@ function init_maek() {
 			await run(command, `${task.label}: compile + prerequisites`,
 				async () => {
 					return {
-						read:[...await loadDeps()],
-						written:[objFile, depsFile]
+						read: [...await loadDeps()],
+						written: [objFile, depsFile]
 					};
 				}
 			);
@@ -447,8 +449,8 @@ function init_maek() {
 			await run(linkCommand, `${task.label}: link`,
 				async () => {
 					return {
-						read:[...objFiles],
-						written:[exeFile]
+						read: [...objFiles],
+						written: [exeFile]
 					};
 				}
 			);
@@ -485,8 +487,8 @@ function init_maek() {
 				//cache will have a 'files' and a 'hashes' line
 				if ('files' in loaded[command] && 'hashes' in loaded[command]) {
 					cache[command] = {
-						files:loaded[command].files,
-						hashes:loaded[command].hashes
+						files: loaded[command].files,
+						hashes: loaded[command].hashes
 					};
 					assigned += 1;
 				} else {
@@ -581,7 +583,7 @@ function init_maek() {
 
 		//store result in cache:
 		if (cacheInfoFn) {
-			const {read, written} = await cacheInfoFn();
+			const { read, written } = await cacheInfoFn();
 
 			//if hashed one of the written files before, can't rely on it:
 			for (const file of written) {
@@ -591,8 +593,8 @@ function init_maek() {
 			//update cache with file content hashes:
 			const files = [...read, ...written];
 			cache[cacheKey] = {
-				files:files,
-				hashes:await hashFiles([exe, ...files])
+				files: files,
+				hashes: await hashFiles([exe, ...files])
 			};
 		}
 
@@ -788,7 +790,7 @@ function init_maek() {
 			//remove task from 'running' list:
 			let i = running.indexOf(task);
 			console.assert(i !== -1, "running tasks must exist within running list");
-			running.splice(i,1);
+			running.splice(i, 1);
 		}
 
 		//ready up anything that can be:
@@ -799,7 +801,7 @@ function init_maek() {
 		}
 
 		//launch tasks until no more can be launched:
-		await new Promise((resolve,reject) => {
+		await new Promise((resolve, reject) => {
 			function pollTasks() {
 				//if can run something now, do so:
 				while (running.length < maek.JOBS && !CANCEL_ALL_TASKS && ready.length > 0) {
