@@ -44,7 +44,7 @@ Load<Sound::Sample> honk_sample(LoadTagDefault, []() -> Sound::Sample const *
 
 Load<StateMachine> story_states(LoadTagDefault, []() -> StateMachine const *
 								{
-	std::vector<State> states;
+	std::vector<StateMachine::State> states;
 
 	std::ifstream file("./parsing/test.story", std::ios::binary);
 	read_chunk(file, "stry", &states);
@@ -75,18 +75,7 @@ PlayMode::PlayMode() : scene(*hexapod_scene)
 	upper_leg_base_rotation = upper_leg->rotation;
 	lower_leg_base_rotation = lower_leg->rotation;
 
-	std::cout << "HI";
-	std::cout.flush();
-	story.states = std::vector(story_states->states);
-
-	for (State state : story.states)
-	{
-		std::cout << "State " << state.id << " " << state.text << std::endl;
-		for (Transition transition : state.transitions)
-		{
-			std::cout << "transition " << transition.dst_id << " " << transition.text << std::endl;
-		}
-	}
+	story = StateMachine(story_states.value);
 
 	// get pointer to camera for convenience:
 	if (scene.cameras.size() != 1)
@@ -107,83 +96,30 @@ bool PlayMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size)
 
 	if (evt.type == SDL_EVENT_KEY_DOWN)
 	{
-		if (evt.key.key == SDLK_ESCAPE)
-		{
-			SDL_SetWindowRelativeMouseMode(Mode::window, false);
-			return true;
-		}
-		else if (evt.key.key == SDLK_A)
+		if (evt.key.key == SDLK_LEFT)
 		{
 			left.downs += 1;
 			left.pressed = true;
 			return true;
 		}
-		else if (evt.key.key == SDLK_D)
+		else if (evt.key.key == SDLK_RIGHT)
 		{
 			right.downs += 1;
 			right.pressed = true;
 			return true;
 		}
-		else if (evt.key.key == SDLK_W)
-		{
-			up.downs += 1;
-			up.pressed = true;
-			return true;
-		}
-		else if (evt.key.key == SDLK_S)
-		{
-			down.downs += 1;
-			down.pressed = true;
-			return true;
-		}
-		else if (evt.key.key == SDLK_SPACE)
-		{
-			if (honk_oneshot)
-				honk_oneshot->stop();
-			honk_oneshot = Sound::play_3D(*honk_sample, 0.3f, glm::vec3(4.6f, -7.8f, 6.9f)); // hardcoded position of front of car, from blender
-		}
 	}
 	else if (evt.type == SDL_EVENT_KEY_UP)
 	{
-		if (evt.key.key == SDLK_A)
+		if (evt.key.key == SDLK_LEFT)
 		{
 			left.pressed = false;
-			return true;
+			return false;
 		}
-		else if (evt.key.key == SDLK_D)
+		else if (evt.key.key == SDLK_RIGHT)
 		{
 			right.pressed = false;
-			return true;
-		}
-		else if (evt.key.key == SDLK_W)
-		{
-			up.pressed = false;
-			return true;
-		}
-		else if (evt.key.key == SDLK_S)
-		{
-			down.pressed = false;
-			return true;
-		}
-	}
-	else if (evt.type == SDL_EVENT_MOUSE_BUTTON_DOWN)
-	{
-		if (SDL_GetWindowRelativeMouseMode(Mode::window) == false)
-		{
-			SDL_SetWindowRelativeMouseMode(Mode::window, true);
-			return true;
-		}
-	}
-	else if (evt.type == SDL_EVENT_MOUSE_MOTION)
-	{
-		if (SDL_GetWindowRelativeMouseMode(Mode::window) == true)
-		{
-			glm::vec2 motion = glm::vec2(
-				evt.motion.xrel / float(window_size.y),
-				-evt.motion.yrel / float(window_size.y));
-			camera->transform->rotation = glm::normalize(
-				camera->transform->rotation * glm::angleAxis(-motion.x * camera->fovy, glm::vec3(0.0f, 1.0f, 0.0f)) * glm::angleAxis(motion.y * camera->fovy, glm::vec3(1.0f, 0.0f, 0.0f)));
-			return true;
+			return false;
 		}
 	}
 
@@ -192,56 +128,17 @@ bool PlayMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size)
 
 void PlayMode::update(float elapsed)
 {
-
-	// slowly rotates through [0,1):
-	wobble += elapsed / 10.0f;
-	wobble -= std::floor(wobble);
-
-	hip->rotation = hip_base_rotation * glm::angleAxis(
-											glm::radians(5.0f * std::sin(wobble * 2.0f * float(M_PI))),
-											glm::vec3(0.0f, 1.0f, 0.0f));
-	upper_leg->rotation = upper_leg_base_rotation * glm::angleAxis(
-														glm::radians(7.0f * std::sin(wobble * 2.0f * 2.0f * float(M_PI))),
-														glm::vec3(0.0f, 0.0f, 1.0f));
-	lower_leg->rotation = lower_leg_base_rotation * glm::angleAxis(
-														glm::radians(10.0f * std::sin(wobble * 3.0f * 2.0f * float(M_PI))),
-														glm::vec3(0.0f, 0.0f, 1.0f));
-
-	// move sound to follow leg tip position:
-	leg_tip_loop->set_position(get_leg_tip_position(), 1.0f / 60.0f);
-
-	// move camera:
 	{
-
-		// combine inputs into a move:
-		constexpr float PlayerSpeed = 30.0f;
-		glm::vec2 move = glm::vec2(0.0f);
-		if (left.pressed && !right.pressed)
-			move.x = -1.0f;
-		if (!left.pressed && right.pressed)
-			move.x = 1.0f;
-		if (down.pressed && !up.pressed)
-			move.y = -1.0f;
-		if (!down.pressed && up.pressed)
-			move.y = 1.0f;
-
-		// make it so that moving diagonally doesn't go faster:
-		if (move != glm::vec2(0.0f))
-			move = glm::normalize(move) * PlayerSpeed * elapsed;
-
-		glm::mat4x3 frame = camera->transform->make_parent_from_local();
-		glm::vec3 frame_right = frame[0];
-		// glm::vec3 up = frame[1];
-		glm::vec3 frame_forward = -frame[2];
-
-		camera->transform->position += move.x * frame_right + move.y * frame_forward;
-	}
-
-	{ // update listener to camera position:
-		glm::mat4x3 frame = camera->transform->make_parent_from_local();
-		glm::vec3 frame_right = frame[0];
-		glm::vec3 frame_at = frame[3];
-		Sound::listener.set_position_right(frame_at, frame_right, 1.0f / 60.0f);
+		if (left.pressed)
+		{
+			left.pressed = false;
+			story.switch_state(story.current_state.transitions[0]);
+		}
+		else if (right.pressed)
+		{
+			right.pressed = false;
+			story.switch_state(story.current_state.transitions[1]);
+		}
 	}
 
 	// reset button press counters:
@@ -275,23 +172,7 @@ void PlayMode::draw(glm::uvec2 const &drawable_size)
 
 	{ // use DrawLines to overlay some text:
 		glDisable(GL_DEPTH_TEST);
-		float aspect = float(drawable_size.x) / float(drawable_size.y);
-		DrawLines lines(glm::mat4(
-			1.0f / aspect, 0.0f, 0.0f, 0.0f,
-			0.0f, 1.0f, 0.0f, 0.0f,
-			0.0f, 0.0f, 1.0f, 0.0f,
-			0.0f, 0.0f, 0.0f, 1.0f));
-
-		constexpr float H = 0.09f;
-		lines.draw_text("Mouse motion rotates camera; WASD moves; escape ungrabs mouse",
-						glm::vec3(-aspect + 0.1f * H, -1.0 + 0.1f * H, 0.0),
-						glm::vec3(H, 0.0f, 0.0f), glm::vec3(0.0f, H, 0.0f),
-						glm::u8vec4(0x00, 0x00, 0x00, 0x00));
-		float ofs = 2.0f / drawable_size.y;
-		lines.draw_text("Mouse motion rotates camera; WASD moves; escape ungrabs mouse",
-						glm::vec3(-aspect + 0.1f * H + ofs, -1.0 + +0.1f * H + ofs, 0.0),
-						glm::vec3(H, 0.0f, 0.0f), glm::vec3(0.0f, H, 0.0f),
-						glm::u8vec4(0xff, 0xff, 0xff, 0x00));
+		story.draw_current_state(drawable_size, glm::vec2(10.0f, 10.0f), glm::vec3(1.0f, 1.0f, 1.0f));
 	}
 	GL_ERRORS();
 }

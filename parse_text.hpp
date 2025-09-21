@@ -27,18 +27,6 @@ struct Parser
     // State machine for the story
     StateMachine story;
 
-    const char *font_file = "FreeSans.otf";
-
-    const int font_size = 36;
-    const int margin = font_size / 2;
-
-    FT_Library ft_library;
-    FT_Face ft_face;
-    hb_font_t *hb_font;
-
-    // Parse the character atlas from a file
-    void parse_atlas(const std::string &filename);
-
     // Parse a state machine from a file.
     // The expected format is the following:
     // n
