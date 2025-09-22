@@ -18,7 +18,7 @@
 #include <hb.h>
 #include <hb-ft.h>
 
-constexpr uint32_t max_line_length = 128;
+constexpr uint32_t max_line_length = 1024;
 constexpr uint32_t max_transition = 2;
 
 struct TextManager
@@ -38,6 +38,25 @@ struct TextManager
     TextManager();
     ~TextManager();
 
+    TextManager operator=(const TextManager other)
+    {
+        if (this == &other)
+            return *this;
+
+        this->ft_library = other.ft_library;
+        this->ft_face = other.ft_face;
+        this->hb_font = other.hb_font;
+        this->character_atlas = std::unordered_map(other.character_atlas);
+        this->program = other.program;
+        this->Position = other.Position;
+        this->Colour = other.Colour;
+        this->TexCoord = other.TexCoord;
+        this->vao = other.vao;
+        this->vbo = other.vbo;
+
+        return *this;
+    }
+
 private:
     // Libraries and fonts to draw the text
     FT_Library ft_library;
@@ -52,12 +71,15 @@ private:
     // Map of all previously seen characters and their corresponding texture
     std::unordered_map<hb_codepoint_t, Glyph> character_atlas;
 
+    // GL properties
     GLuint program;
     GLuint Position;
     GLuint Colour;
     GLuint TexCoord;
     GLuint vao;
     GLuint vbo;
+
+    std::vector<std::string> wrap_text(std::string str, glm::vec2 window_dimensions, glm::vec2 anchor);
 };
 
 // State machine
@@ -102,6 +124,7 @@ struct StateMachine
         this->current_state = other.current_state;
         this->text_to_display = other.text_to_display;
         this->states = std::vector(other.states);
+        
         return this;
     }
 

@@ -7,7 +7,7 @@
 
 Parser::Parser()
 {
-    story = StateMachine();
+    story = {};
 }
 
 Parser::~Parser() {}
@@ -39,7 +39,6 @@ void Parser::parse_story(const std::string &filename)
 
         // Get the state text
         file.getline(current_state.text, max_line_length, '|');
-        std::cout << current_state.text << std::endl;
 
         // Get the transitions form current_state
         uint32_t transition_index = 0;
@@ -54,21 +53,20 @@ void Parser::parse_story(const std::string &filename)
             // Get the transition text
             file.getline(t.text, max_line_length, '|');
             current_state.transitions[transition_index] = t;
-            std::cout << t.text << std::endl;
 
             transition_index++;
             c = file.peek();
         }
         file >> c;
 
-        story.add_state(current_state);
+        story.emplace_back(current_state);
     }
 
-    assert(story.get_states().size() == nb_states && "Invalid number of states in the state machine, does not match number specified at the top of the file");
+    // assert(story.size() == nb_states && "Invalid number of states in the state machine, does not match number specified at the top of the file");
 
     std::string atlas = std::filesystem::path(filename).stem();
     std::ofstream out("./parsing/" + atlas + ".story", std::ios::binary);
-    write_chunk("stry", story.get_states(), &out);
+    write_chunk("stry", story, &out);
     out.close();
 
     file.close();

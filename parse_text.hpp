@@ -25,7 +25,7 @@ struct Parser
     std::vector<std::pair<hb_codepoint_t, FT_Bitmap>> character_atlas_vector;
 
     // State machine for the story
-    StateMachine story;
+    std::vector<StateMachine::State> story;
 
     // Parse a state machine from a file.
     // The expected format is the following:

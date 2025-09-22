@@ -2,6 +2,8 @@
 
 #include <assert.h>
 #include <iostream>
+#include <sstream>
+
 #include "gl_compile_program.hpp"
 
 // Shaders taken from https://github.com/jialand/TheMuteLift#
@@ -55,6 +57,7 @@ TextManager::TextManager()
     }
 
     hb_font = hb_ft_font_create(ft_face, NULL);
+    hb_ft_font_set_funcs(hb_font); // use FT-provided metric functions
 
     // Taken from https://github.com/jialand/TheMuteLift#
     program = gl_compile_program(vertexSrc, fragmentSrc);
@@ -124,86 +127,179 @@ void TextManager::draw_text(std::string str, glm::vec2 window_dimensions, glm::v
     glActiveTexture(GL_TEXTURE0);
     glUniform1i(TexCoord, 0);
 
-    hb_buffer_t *hb_buffer;
-    hb_buffer = hb_buffer_create();
-    hb_buffer_add_utf8(hb_buffer, str.c_str(), -1, 0, -1);
-    hb_buffer_guess_segment_properties(hb_buffer);
-
-    hb_feature_t features[] = {
-        {HB_TAG('k', 'e', 'r', 'n'), 1, 0, ~0u},
-        {HB_TAG('l', 'i', 'g', 'a'), 1, 0, ~0u},
-    };
-
-    hb_shape(hb_font, hb_buffer, features, sizeof(features) / sizeof(features[0]));
-
-    unsigned int len = hb_buffer_get_length(hb_buffer);
-    hb_glyph_info_t *info = hb_buffer_get_glyph_infos(hb_buffer, NULL);
-    hb_glyph_position_t *pos = hb_buffer_get_glyph_positions(hb_buffer, NULL);
-
-    glUniform3f(Colour, colour.r, colour.g, colour.b);
-    glBindVertexArray(vao);
-
-    // Enable alpha blending for text rendering
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
     // Position of the cursor that is writing the text
     float pen_x = anchor.x;
     float pen_y = anchor.y;
 
-    for (unsigned int i = 0; i < len; i++)
+    std::vector<std::string> wrapped_text = wrap_text(str, window_dimensions, anchor);
+    for (std::string line : wrapped_text)
     {
-        hb_codepoint_t gid = info[i].codepoint;
+        hb_buffer_t *hb_buffer;
+        hb_buffer = hb_buffer_create();
+        hb_buffer_add_utf8(hb_buffer, line.c_str(), -1, 0, -1);
+        hb_buffer_guess_segment_properties(hb_buffer);
 
-        if (gid == 0)
+        hb_feature_t features[] = {
+            {HB_TAG('k', 'e', 'r', 'n'), 1, 0, ~0u},
+            {HB_TAG('l', 'i', 'g', 'a'), 1, 0, ~0u},
+        };
+
+        hb_shape(hb_font, hb_buffer, features, sizeof(features) / sizeof(features[0]));
+
+        unsigned int len = hb_buffer_get_length(hb_buffer);
+        hb_glyph_info_t *info = hb_buffer_get_glyph_infos(hb_buffer, NULL);
+        hb_glyph_position_t *pos = hb_buffer_get_glyph_positions(hb_buffer, NULL);
+
+        glUniform3f(Colour, colour.r, colour.g, colour.b);
+        glBindVertexArray(vao);
+
+        // Enable alpha blending for text rendering
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+        for (unsigned int i = 0; i < len; i++)
         {
-            throw std::invalid_argument("File contained characters not defined in the given font");
+            hb_codepoint_t gid = info[i].codepoint;
+
+            if (gid == 0)
+            {
+                throw std::invalid_argument("File contained characters not defined in the given font");
+            }
+
+            // Get the current glyph
+            const auto &found = character_atlas.find(gid);
+            Glyph glyph;
+            if (found == character_atlas.end())
+            {
+                load_glyph(gid);
+            }
+            glyph = character_atlas[gid];
+
+            // Adapted from https://github.com/tangrams/harfbuzz-example
+            float x_advance = pos[i].x_advance / 64.0f;
+            float y_advance = pos[i].y_advance / 64.0f;
+            float x_offset = pos[i].x_offset / 64.0f;
+            float y_offset = pos[i].y_offset / 64.0f;
+
+            float x0 = pen_x + x_offset + glyph.bearing_x;
+            float y0 = pen_y - y_offset - glyph.bearing_y;
+            float x1 = x0 + glyph.width;
+            float y1 = y0 + glyph.height;
+
+            float quad[] = {
+                x0, y0, 0.0f, 0.0f,
+                x1, y0, 1.0f, 0.0f,
+                x1, y1, 1.0f, 1.0f,
+
+                x0, y0, 0.0f, 0.0f,
+                x1, y1, 1.0f, 1.0f,
+                x0, y1, 0.0f, 1.0f};
+
+            glBindTexture(GL_TEXTURE_2D, glyph.tex_id);
+            glBindBuffer(GL_ARRAY_BUFFER, vbo);
+            glBufferData(GL_ARRAY_BUFFER, sizeof(quad), quad, GL_DYNAMIC_DRAW);
+            glDrawArrays(GL_TRIANGLES, 0, 6);
+
+            pen_x += x_advance;
+            pen_y += y_advance;
         }
 
-        // Get the current glyph
-        const auto &found = character_atlas.find(gid);
-        std::cout << "Looking for glyph " << (char)gid << " " << gid << std::endl;
-        Glyph glyph;
-        if (found == character_atlas.end())
-        {
-            load_glyph(gid);
-        }
-        glyph = character_atlas[gid];
-        std::cout << "Glyph " << (char)gid << " " << gid << " " << glyph.width << "x" << glyph.height << " tex_id: " << glyph.tex_id << std::endl;
-
-        // Taken from https://github.com/tangrams/harfbuzz-example
-        float x_advance = pos[i].x_advance / 64.0f;
-        float y_advance = pos[i].y_advance / 64.0f;
-        float x_offset = pos[i].x_offset / 64.0f;
-        float y_offset = pos[i].y_offset / 64.0f;
-        float x0 = pen_x + x_offset + glyph.bearing_x;
-        float y0 = floor(pen_y + y_offset + glyph.bearing_y);
-        float x1 = x0 + glyph.width;
-        float y1 = floor(y0 - glyph.height);
-
-        float quad[] = {
-            x0, y0, 0.0f, 0.0f,
-            x1, y0, 1.0f, 0.0f,
-            x1, y1, 1.0f, 1.0f,
-
-            x0, y0, 0.0f, 0.0f,
-            x1, y1, 1.0f, 1.0f,
-            x0, y1, 0.0f, 1.0f};
-
-        glBindTexture(GL_TEXTURE_2D, glyph.tex_id);
-        glBindBuffer(GL_ARRAY_BUFFER, vbo);
-        glBufferData(GL_ARRAY_BUFFER, sizeof(quad), quad, GL_DYNAMIC_DRAW);
-        glDrawArrays(GL_TRIANGLES, 0, 6);
-
-        pen_x += x_advance;
-        pen_y += y_advance;
+        pen_x = anchor.x;
+        pen_y += font_size;
+        
+        hb_buffer_destroy(hb_buffer);
+        glBindVertexArray(0);
     }
-
-    hb_buffer_destroy(hb_buffer);
-    glBindVertexArray(0);
 
     glDisable(GL_BLEND);
     glUseProgram(0);
+}
+
+std::vector<std::string> TextManager::wrap_text(std::string str, glm::vec2 window_dimensions, glm::vec2 anchor)
+{
+    std::stringstream ss(str);
+
+    std::vector<std::string> words;
+
+    std::string token;
+    while (getline(ss, token, ' '))
+        words.emplace_back(token);
+
+    std::vector<std::string> output;
+    std::string line;
+    float line_length = 0;
+    for (std::string word : words)
+    {
+        std::cout << "Word: " << word << std::endl;
+
+        hb_buffer_t *hb_buffer;
+        hb_buffer = hb_buffer_create();
+        hb_buffer_add_utf8(hb_buffer, word.c_str(), -1, 0, -1);
+        hb_buffer_guess_segment_properties(hb_buffer);
+
+        hb_feature_t features[] = {
+            {HB_TAG('k', 'e', 'r', 'n'), 1, 0, ~0u},
+            {HB_TAG('l', 'i', 'g', 'a'), 1, 0, ~0u},
+        };
+
+        hb_shape(hb_font, hb_buffer, features, sizeof(features) / sizeof(features[0]));
+
+        unsigned int len = hb_buffer_get_length(hb_buffer);
+        hb_glyph_position_t *pos = hb_buffer_get_glyph_positions(hb_buffer, NULL);
+
+        unsigned int break_index = 0;
+        unsigned int token_length = 0;
+        bool word_fit = false;
+        bool no_break = true;
+        while (!word_fit)
+        {
+            for (unsigned int i = break_index; i < len; i++)
+            {
+                std::cout << i << " ";
+                line_length += pos[i].x_advance / 55.0f;
+                if (line_length + anchor.x >= window_dimensions.x - margin)
+                {
+                    std::cout << "Too big";
+                    token_length = i - break_index;
+                    break_index = i;
+                    no_break = false;
+                    break;
+                }
+            }
+
+            if (no_break)
+            {
+                line.append(word + ' ');
+                word_fit = true;
+            }
+            else if (line.empty())
+            {
+                std::cout << "empty line " << token_length << " " << break_index << " " << len - 1 << std::endl;
+                if (break_index == len - 1 || token_length == 0)
+                {
+                    word_fit = true;
+                }
+                line.append(word.substr(break_index - token_length, token_length - 1));
+                output.emplace_back(line);
+                line = std::string();
+                line_length = 0;
+            }
+            else
+            {
+                std::cout << "Line isn't empty" << std::endl;
+                output.emplace_back(line);
+                line = std::string();
+                break_index = 0;
+                token_length = 0;
+                word_fit = false;
+                no_break = true;
+                line_length = 0;
+            }
+        }
+        std::cout << "Line: " << line << std::endl;
+    }
+    output.emplace_back(line);
+    return output;
 }
 
 StateMachine::StateMachine()
@@ -278,5 +374,5 @@ std::string StateMachine::to_string()
 void StateMachine::draw_current_state(glm::vec2 window_dimensions, glm::vec2 anchor, glm::vec3 colour)
 {
     tm.draw_text(text_to_display, window_dimensions, anchor, colour);
-    std::cout << text_to_display << std::endl;
+    // std::cout << text_to_display << std::endl;
 }
