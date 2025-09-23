@@ -85,5 +85,5 @@ void Parser::parse_story(const std::string &filename)
 int main()
 {
     Parser parser;
-    parser.parse_story("test.txt");
+    parser.parse_story("story.txt");
 }
