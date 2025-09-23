@@ -3,6 +3,7 @@
 #include <assert.h>
 #include <iostream>
 #include <sstream>
+#include <algorithm>
 
 #include "gl_compile_program.hpp"
 
@@ -206,7 +207,7 @@ void TextManager::draw_text(std::string str, glm::vec2 window_dimensions, glm::v
 
         pen_x = anchor.x;
         pen_y += font_size;
-        
+
         hb_buffer_destroy(hb_buffer);
         glBindVertexArray(0);
     }
@@ -227,10 +228,14 @@ std::vector<std::string> TextManager::wrap_text(std::string str, glm::vec2 windo
 
     std::vector<std::string> output;
     std::string line;
-    float line_length = 0;
+    float line_length = 0.0f;
+    float acc = 0.0f;
     for (std::string word : words)
     {
+        if (word.length() == 0)
+            continue;
         std::cout << "Word: " << word << std::endl;
+        std::cout.flush();
 
         hb_buffer_t *hb_buffer;
         hb_buffer = hb_buffer_create();
@@ -244,53 +249,87 @@ std::vector<std::string> TextManager::wrap_text(std::string str, glm::vec2 windo
 
         hb_shape(hb_font, hb_buffer, features, sizeof(features) / sizeof(features[0]));
 
+        unsigned int glyph_count_after;
         unsigned int len = hb_buffer_get_length(hb_buffer);
         hb_glyph_position_t *pos = hb_buffer_get_glyph_positions(hb_buffer, NULL);
+        hb_glyph_info_t *infos = hb_buffer_get_glyph_infos(hb_buffer, &glyph_count_after);
 
         unsigned int break_index = 0;
+
         unsigned int token_length = 0;
+        unsigned int string_index = 0;
+        unsigned int break_string_index = 0;
+
         bool word_fit = false;
         bool no_break = true;
-        while (!word_fit)
+        uint32_t current_cluster = infos[0].cluster;
+
+        while (!word_fit && break_index < len)
         {
             for (unsigned int i = break_index; i < len; i++)
             {
-                std::cout << i << " ";
-                line_length += pos[i].x_advance / 55.0f;
-                if (line_length + anchor.x >= window_dimensions.x - margin)
+                uint32_t cluster = infos[i].cluster;
+                if (cluster != current_cluster)
                 {
-                    std::cout << "Too big";
-                    token_length = i - break_index;
-                    break_index = i;
-                    no_break = false;
-                    break;
+                    std::cout << string_index << " " << word[string_index] << std::endl;
+                    string_index++;
+                    current_cluster = cluster;
+
+                    if (line_length + anchor.x >= window_dimensions.x - margin)
+                    {
+                        token_length = string_index - break_string_index;
+                        // std::cout << "Too big" << token_length << " " << break_index << " " << i << std::endl;
+                        break_string_index = string_index;
+                        break_index = i;
+                        no_break = false;
+                        break;
+                    }
+                    line_length += acc;
+                    acc = 0.0f;
                 }
+                acc += pos[i].x_advance / 55.0f;
             }
 
             if (no_break)
             {
-                line.append(word + ' ');
+                // std::cout << "FIT" << std::endl;
+                std::cout.flush();
+                line.append(word.substr(break_string_index, word.length() - break_string_index) + ' ');
                 word_fit = true;
             }
             else if (line.empty())
             {
-                std::cout << "empty line " << token_length << " " << break_index << " " << len - 1 << std::endl;
-                if (break_index == len - 1 || token_length == 0)
-                {
-                    word_fit = true;
-                }
-                line.append(word.substr(break_index - token_length, token_length - 1));
+                std::cout << "empty line " << token_length << " " << break_index << " " << break_string_index << " " << infos[break_index].cluster << std::endl;
+                std::cout.flush();
+                line.append(word.substr(break_string_index - token_length, token_length));
+                std::cout << "Substr " << word.substr(break_string_index - token_length, token_length) << std::endl;
                 output.emplace_back(line);
                 line = std::string();
                 line_length = 0;
+                token_length = 0;
+                break_index++;
+
+                if (break_string_index >= word.length() - 1)
+                {
+                    std::cout << "fit last letters " << word.substr(break_string_index - 1, 1) << "========================" << std::endl;
+                    line.append(word.substr(break_string_index, word.length() - break_string_index));
+                    output.emplace_back(line);
+                    line = std::string();
+                    line_length = 0;
+
+                    word_fit = true;
+                }
             }
             else
             {
                 std::cout << "Line isn't empty" << std::endl;
+                std::cout.flush();
                 output.emplace_back(line);
                 line = std::string();
                 break_index = 0;
                 token_length = 0;
+                break_string_index = 0;
+                string_index = 0;
                 word_fit = false;
                 no_break = true;
                 line_length = 0;
