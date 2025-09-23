@@ -26,6 +26,7 @@ Load<StateMachine> story_states(LoadTagDefault, []() -> StateMachine const *
 PlayMode::PlayMode()
 {
 	story = StateMachine(story_states.value);
+	story.reset();
 }
 
 PlayMode::~PlayMode()

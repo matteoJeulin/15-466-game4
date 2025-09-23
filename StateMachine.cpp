@@ -234,8 +234,6 @@ std::vector<std::string> TextManager::wrap_text(std::string str, glm::vec2 windo
     {
         if (word.length() == 0)
             continue;
-        std::cout << "Word: " << word << std::endl;
-        std::cout.flush();
 
         hb_buffer_t *hb_buffer;
         hb_buffer = hb_buffer_create();
@@ -271,14 +269,12 @@ std::vector<std::string> TextManager::wrap_text(std::string str, glm::vec2 windo
                 uint32_t cluster = infos[i].cluster;
                 if (cluster != current_cluster)
                 {
-                    std::cout << string_index << " " << word[string_index] << std::endl;
                     string_index++;
                     current_cluster = cluster;
 
                     if (line_length + anchor.x >= window_dimensions.x - margin)
                     {
                         token_length = string_index - break_string_index;
-                        // std::cout << "Too big" << token_length << " " << break_index << " " << i << std::endl;
                         break_string_index = string_index;
                         break_index = i;
                         no_break = false;
@@ -292,17 +288,12 @@ std::vector<std::string> TextManager::wrap_text(std::string str, glm::vec2 windo
 
             if (no_break)
             {
-                // std::cout << "FIT" << std::endl;
-                std::cout.flush();
                 line.append(word.substr(break_string_index, word.length() - break_string_index) + ' ');
                 word_fit = true;
             }
             else if (line.empty())
             {
-                std::cout << "empty line " << token_length << " " << break_index << " " << break_string_index << " " << infos[break_index].cluster << std::endl;
-                std::cout.flush();
                 line.append(word.substr(break_string_index - token_length, token_length));
-                std::cout << "Substr " << word.substr(break_string_index - token_length, token_length) << std::endl;
                 output.emplace_back(line);
                 line = std::string();
                 line_length = 0;
@@ -311,7 +302,6 @@ std::vector<std::string> TextManager::wrap_text(std::string str, glm::vec2 windo
 
                 if (break_string_index >= word.length() - 1)
                 {
-                    std::cout << "fit last letters " << word.substr(break_string_index - 1, 1) << "========================" << std::endl;
                     line.append(word.substr(break_string_index, word.length() - break_string_index));
                     output.emplace_back(line);
                     line = std::string();
@@ -322,8 +312,6 @@ std::vector<std::string> TextManager::wrap_text(std::string str, glm::vec2 windo
             }
             else
             {
-                std::cout << "Line isn't empty" << std::endl;
-                std::cout.flush();
                 output.emplace_back(line);
                 line = std::string();
                 break_index = 0;
@@ -335,7 +323,6 @@ std::vector<std::string> TextManager::wrap_text(std::string str, glm::vec2 windo
                 line_length = 0;
             }
         }
-        std::cout << "Line: " << line << std::endl;
     }
     output.emplace_back(line);
     return output;
@@ -386,6 +373,11 @@ void StateMachine::switch_state(Transition transition)
         text_to_display.append(" ");
         text_to_display.append(current_state.text);
     }
+}
+
+void StateMachine::reset() {
+    current_state = states[0];
+    text_to_display = current_state.text;
 }
 
 std::string StateMachine::to_string()

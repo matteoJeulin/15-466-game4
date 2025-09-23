@@ -14,7 +14,7 @@ Screen Shot:
 
 How To Play:
 
-Choose between the different choices by pressing the arrow keys (left or right).
+Choose between the different choices by pressing the arrow keys (left or right). You can also reset by pressing R.
 
 Sources: I used the freesans font from https://fontmeme.com/fonts/freesans-font/ (a public domain font)
 

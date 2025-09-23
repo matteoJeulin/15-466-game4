@@ -108,6 +108,8 @@ struct StateMachine
 
     void add_state(State state);
 
+    void reset();
+
     std::vector<State> get_states();
 
     std::string to_string();
